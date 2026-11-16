@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>5 Crowns Scorecard</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#6a1fb5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="5 Crowns Scorecard">
+<style>
+:root{--bg:#faf7f0;--card:#fff;--ink:#2a2a2a;--mute:#7a7468;--line:#e4ddcc;--accent:#6a1fb5;--win:#2e7d32;--winbg:#e3f3e4;--gold:#b8860b;box-sizing:border-box;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#1a1a1f;--card:#25252c;--ink:#f0ede6;--mute:#a09a8c;--line:#3a3a44;--accent:#b58cff;--win:#7fd48a;--winbg:#1f3a24;--gold:#ffd24a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;max-width:900px;margin:0 auto}
+h1{font-size:1.4rem;margin:0 0 10px}
+h2{font-size:1.05rem;margin:18px 0 8px}
+.row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px}
+#name{flex:1;min-width:0}
+button{font:inherit;border:0;border-radius:8px;padding:10px 14px;background:var(--accent);color:#fff;font-weight:600}
+button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line)}
+.tabs button{flex:1;background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.tabs button.on{background:var(--accent);color:#fff}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:6px;text-align:center;border-bottom:1px solid var(--line);min-width:84px}
+th:first-child,td:first-child{position:sticky;left:0;background:var(--card);min-width:64px;font-weight:700;border-right:1px solid var(--line)}
+th small{display:block;font-weight:400;color:var(--mute)}
+td input{width:72px;text-align:center;padding:8px 4px}
+tr.total td{font-size:1.2rem;font-weight:700;border-bottom:0}
+tr.total td.lead{background:var(--winbg);color:var(--win)}
+.rd{font-size:.7rem;color:var(--mute);display:block;font-weight:400}
+.status{margin:0 0 12px;font-weight:600}
+.banner{background:var(--winbg);color:var(--win);border:2px solid var(--gold);border-radius:12px;padding:16px;text-align:center;margin-bottom:12px}
+.banner .big{font-size:1.5rem;font-weight:800}
+.empty{color:var(--mute);padding:16px;text-align:center}
+.g{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+.g small{color:var(--mute)}
+.hide{display:none}
+</style>
+</head>
+<body>
+<h1>👑 5 Crowns Scorecard</h1>
+<div class="row tabs"><button id="tg" class="on">Game</button><button id="th">History</button></div>
+
+<div id="game">
+  <div class="row"><input id="name" placeholder="Add player name" maxlength="20"><button id="add">Add</button></div>
+  <div id="banner"></div>
+  <div class="status" id="status"></div>
+  <div class="wrap"><table id="tbl"></table></div>
+  <div class="row" style="margin-top:12px"><button class="ghost" id="reset">Discard scores</button><button class="ghost" id="clear">Remove all players</button></div>
+</div>
+
+<div id="hist" class="hide">
+  <div class="row"><button id="csv">Download history (CSV)</button><button class="ghost" id="hclear">Clear history</button></div>
+  <h2>Leaderboard</h2>
+  <div class="wrap"><table id="stats"></table></div>
+  <h2>Past games</h2>
+  <div id="games"></div>
+</div>
+
+<script>
+var ROUNDS=['3','4','5','6','7','8','9','10','J','Q','K'];
+var S={players:[],scores:[],history:[]};
+try{var raw=localStorage.getItem('fc5');if(raw)S=JSON.parse(raw)}catch(e){}
+S.players=S.players||[];S.scores=S.scores||[];S.history=S.history||[];
+function save(){try{localStorage.setItem('fc5',JSON.stringify(S))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function cell(r,p){var v=S.scores[r]&&S.scores[r][p];return(v===undefined||v==='')?null:(parseInt(v,10)||0)}
+function totals(){return S.players.map(function(_,p){var t=0;ROUNDS.forEach(function(_,r){t+=cell(r,p)||0});return t})}
+function anyScore(){return ROUNDS.some(function(_,r){return S.players.some(function(_,p){return cell(r,p)!==null})})}
+function complete(){return S.players.length>=2&&ROUNDS.every(function(_,r){return S.players.every(function(_,p){return cell(r,p)!==null})})}
+
+function updateTotals(){
+  var t=totals(),any=anyScore(),done=complete(),min=Math.min.apply(null,t);
+  t.forEach(function(v,i){var c=document.getElementById('t'+i);var w=any&&v===min;c.textContent=(done&&w?'👑 ':'')+v;c.className=w?'lead':''});
+  var st=document.getElementById('status'),b=document.getElementById('banner');
+  var names=S.players.filter(function(_,i){return t[i]===min});
+  if(done){
+    st.textContent='';
+    b.innerHTML='<div class="banner"><div class="big">👑 '+esc(names.join(' & '))+(names.length>1?' tie!':' wins!')+'</div><div>Lowest score: '+min+'</div><div class="row" style="justify-content:center;margin:12px 0 0"><button id="savegame">Save game to history</button></div></div>';
+    document.getElementById('savegame').onclick=saveGame;
+  }else{
+    b.innerHTML='';
+    st.textContent=(any&&S.players.length)?'Leading: '+names.join(', ')+' ('+min+')':'';
+  }
+}
+function render(){
+  var tb=document.getElementById('tbl');
+  if(!S.players.length){tb.innerHTML='<tr><td class="empty" style="position:static;border:0">Add players to begin.</td></tr>';updateTotals();return}
+  var h='<tr><th>Rd</th>';
+  S.players.forEach(function(n,i){h+='<th>'+esc(n)+'<small data-rm="'+i+'">remove</small></th>'});
+  h+='</tr>';
+  ROUNDS.forEach(function(r,ri){
+    var wild=r.length===1&&isNaN(r)?{J:'Jacks',Q:'Queens',K:'Kings'}[r]+' wild':r+'s wild';
+    h+='<tr><td>'+r+'<span class="rd">'+wild+'</span></td>';
+    S.players.forEach(function(_,p){
+      var v=(S.scores[ri]&&S.scores[ri][p]!==undefined)?S.scores[ri][p]:'';
+      h+='<td><input type="number" inputmode="numeric" min="0" data-r="'+ri+'" data-p="'+p+'" value="'+v+'"></td>'});
+    h+='</tr>';
+  });
+  h+='<tr class="total"><td>Total</td>';
+  S.players.forEach(function(_,i){h+='<td id="t'+i+'">0</td>'});
+  tb.innerHTML=h+'</tr>';updateTotals();
+}
+function saveGame(){
+  var t=totals(),min=Math.min.apply(null,t);
+  S.history.push({d:Date.now(),p:S.players.map(function(n,i){return{n:n,t:t[i],s:ROUNDS.map(function(_,r){return cell(r,i)})}}),w:S.players.filter(function(_,i){return t[i]===min})});
+  S.scores=[];save();render();showTab('h');
+}
+function stats(){
+  var m={};
+  S.history.forEach(function(g){g.p.forEach(function(x){var k=x.n.trim().toLowerCase();var o=m[k]||(m[k]={n:x.n,g:0,w:0,sum:0,best:null});
+    o.g++;o.sum+=x.t;o.n=x.n;if(g.w.indexOf(x.n)>-1)o.w++;if(o.best===null||x.t<o.best)o.best=x.t})});
+  return Object.keys(m).map(function(k){return m[k]}).sort(function(a,b){return b.w-a.w||(a.sum/a.g)-(b.sum/b.g)});
+}
+function renderHist(){
+  var s=stats(),h='<tr><th>Player</th><th>Games</th><th>Wins</th><th>Avg score</th><th>Best</th></tr>';
+  if(!s.length)h='<tr><td class="empty" style="position:static;border:0">No saved games yet.</td></tr>';
+  s.forEach(function(o,i){h+='<tr><td style="position:static">'+(i===0&&o.w?'👑 ':'')+esc(o.n)+'</td><td>'+o.g+'</td><td>'+o.w+'</td><td>'+Math.round(o.sum/o.g)+'</td><td>'+o.best+'</td></tr>'});
+  document.getElementById('stats').innerHTML=h;
+  var g='';
+  S.history.slice().reverse().forEach(function(x){
+    g+='<div class="g"><b>👑 '+esc(x.w.join(' & '))+'</b> <small>'+new Date(x.d).toLocaleDateString()+'</small><br><small>'+x.p.map(function(q){return esc(q.n)+' '+q.t}).join(' · ')+'</small></div>'});
+  document.getElementById('games').innerHTML=g||'<div class="empty">Finish a game and save it to see it here.</div>';
+}
+function csv(){
+  var q=function(v){return'"'+String(v).replace(/"/g,'""')+'"'};
+  var rows=[['Date','Player','Total','Winner'].concat(ROUNDS.map(function(r){return'Round '+r}))];
+  S.history.forEach(function(g){g.p.forEach(function(x){rows.push([new Date(g.d).toISOString().slice(0,10),x.n,x.t,g.w.indexOf(x.n)>-1?'Yes':'No'].concat(x.s.map(function(v){return v===null?'':v})))})});
+  var blob=new Blob([rows.map(function(r){return r.map(q).join(',')}).join('\n')],{type:'text/csv'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='5-crowns-history.csv';document.body.appendChild(a);a.click();a.remove();
+}
+function showTab(t){
+  document.getElementById('game').className=t==='g'?'':'hide';
+  document.getElementById('hist').className=t==='h'?'':'hide';
+  document.getElementById('tg').className=t==='g'?'on':'';
+  document.getElementById('th').className=t==='h'?'on':'';
+  if(t==='h')renderHist();
+}
+document.getElementById('tg').onclick=function(){showTab('g')};
+document.getElementById('th').onclick=function(){showTab('h')};
+document.getElementById('tbl').addEventListener('input',function(e){
+  var el=e.target;if(el.tagName!=='INPUT')return;
+  var r=+el.dataset.r,p=+el.dataset.p;
+  if(!S.scores[r])S.scores[r]=[];
+  S.scores[r][p]=el.value;save();updateTotals();
+});
+document.getElementById('tbl').addEventListener('click',function(e){
+  var i=e.target.dataset&&e.target.dataset.rm;if(i===undefined)return;
+  if(!confirm('Remove '+S.players[i]+' and their scores?'))return;
+  S.players.splice(+i,1);S.scores.forEach(function(r){if(r)r.splice(+i,1)});save();render();
+});
+function add(){var el=document.getElementById('name'),n=el.value.trim();if(!n)return;S.players.push(n);el.value='';save();render()}
+document.getElementById('add').onclick=add;
+document.getElementById('name').addEventListener('keydown',function(e){if(e.key==='Enter')add()});
+document.getElementById('reset').onclick=function(){if(confirm('Discard the current scores?')){S.scores=[];save();render()}};
+document.getElementById('clear').onclick=function(){if(confirm('Remove all players and current scores? History is kept.')){S.players=[];S.scores=[];save();render()}};
+document.getElementById('csv').onclick=csv;
+document.getElementById('hclear').onclick=function(){if(confirm('Delete all saved game history?')){S.history=[];save();renderHist()}};
+render();
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
+</script>
+</body>
+</html>
